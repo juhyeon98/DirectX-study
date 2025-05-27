@@ -4,7 +4,7 @@ Input::Input()
 {
 }
 
-Input::Input(const Input* other)
+Input::Input(const Input& other)
 {
 }
 

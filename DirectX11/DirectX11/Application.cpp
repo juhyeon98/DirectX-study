@@ -23,8 +23,10 @@ void Application::Shutdown()
 
 bool Application::Frame()
 {
+	return true;
 }
 
 bool Application::Render()
 {
+	return true;
 }
