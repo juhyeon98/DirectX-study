@@ -57,17 +57,25 @@ void System::Run()
 	ZeroMemory(&msg, sizeof(MSG));
 	while (!done)
 	{
+		// 윈도우 시스템 메시지를 확인한다.
+		/*
+		* 윈도우 시스템에서 메시지를 받는 함수는 PeekMessage와 GetMessage 이렇게 두가지가 있다.
+		* 이 두 함수의 차이점은 Blocking이냐, Non-blocking의 차이이다.
+		* - GetMessage : Blocking 함수로, 메시지가 올 때까지 기다린다.
+		* - PeekMessage : Non-blocking 함수로, 메시지가 오지 않았다면 FALSE를 반환한다.
+		*/
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 
+		// 메시지가 종료 메시지라면 프로그램을 끝낸다.
 		if (msg.message == WM_QUIT)
 		{
 			done = true;
 		}
-		else if (!Frame())
+		else if (!Frame()) // 그렇지 않으면 프레임을 처리한다.
 		{
 			done = true;
 		}

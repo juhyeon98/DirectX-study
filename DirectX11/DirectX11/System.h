@@ -33,7 +33,9 @@ public:
 
 	/*
 	* Unix로 따지면, 시그널을 처리하는 함수
-	* Windows는 message driven 이기 때문에, 메시지를 처리하도록 한다.
+	* 하지만, Unix의 시그널은 소프트웨어 인터럽트인 반면, Windows의 Message는 소프트웨어/하드웨어 인터럽트로 범위가 넓다.
+	* 그리고 Windows는 별도의 커널 스택이 없으며, 커널이 모든 스레드의 Message 큐를 관리한다.
+	* Windows는 message driven 시스템으로 모든 인터럽트를 message로 처리한다.
 	* 
 	* 기본적인 동작 원리는
 	* 1. 커널에서 창(HWND)에서의 이벤트가 발생하는 것을 감지
