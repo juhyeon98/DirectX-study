@@ -44,16 +44,18 @@ bool D3D::Initialize(int screenWidth, int screenHeight, bool vsync, HWND hwnd, b
 	HRESULT result; // COM(Component Object Model)에서 함수 호출의 성공여부. 보통 HRESULT 사용
 	int error;
 	
-	IDXGIFactory* factory; // 하드웨어 리소스(그래픽 카드)를 탐색하고 관리하는 객체
-	IDXGIAdapter* adapter; // 개별의 그래픽카드
-	IDXGIOutput* adapterOutput; // 그래픽 어댑터에 연결된 출력 장치(모니터)
-	unsigned int numerator, denomiator; // 모니터 주사율을 나타내는 분수 값. 만일 60Hz라면 numerator는 60,denomitor는 1
+	IDXGIFactory* factory; // DXGI를 생성해주는 인터페이스. DXGI를 통해 하드웨어 정보를 읽어올 수 있다.
+	// DXGI은 어떤 실체가 아니라 COM기반의 인터페이스들을 아우르는 말이다.
+	// IDXGIAdapter, IDXGIOutput 같은 인터페이스들은 COM 객체로 실제 연결되어 있는 라이브러리와 API와 통신한다.
+	IDXGIAdapter* adapter; // 그래픽카드 인터페이스
+	IDXGIOutput* adapterOutput; // 그래픽 어댑터에 연결된 출력 장치...에 대한 인터페이스(like IDXGIAdapter)
+	unsigned int numerator, denominator; // 모니터 주사율을 나타내는 분수 값. 만일 60Hz라면 numerator는 60,denomitor는 1
 
 	DXGI_MODE_DESC* displayModeList; // DXGI_MODE_DESC는 특정 디스플레이 모드를 기술
 	unsigned int numModes; // 모니터에서 지원하는 디스플레이 모드(해상도, 주사율, 포멧 같은)의 개수
 
 	DXGI_ADAPTER_DESC adapterDesc; // 선택된 그래픽 어댑터의 상세 정보(이름, 벤더ID, 디바이스ID, 전용 메모리 등등)을 저장
-	unsigned long long stringLegth; // DXGI_ADAPTER_DESC 어댑터 이름의 길이
+	unsigned long long stringLength; // DXGI_ADAPTER_DESC 어댑터 이름의 길이
 	
 	D3D_FEATURE_LEVEL featureLevel; // D3D_FEATURE_LEVEL 열거형
 
@@ -84,21 +86,97 @@ bool D3D::Initialize(int screenWidth, int screenHeight, bool vsync, HWND hwnd, b
 
 	mVsyncEnabled = vsync;
 
+	// DirectX 그래픽 인터페이스 팩토리 생성
 	result = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory);
 	if (FAILED(result))
 	{
 		return false;
 	}
 
+	// 그래픽 인터페이스 어댑터 생성
 	result = factory->EnumAdapters(0, &adapter);
 	if (FAILED(result))
 	{
 		return false;
 	}
 
+	// 출력할 모니터 나열
 	result = adapter->EnumOutputs(0, &adapterOutput);
 	if (FAILED(result))
 	{
 		return false;
 	}
+
+	// 모니터에 대한 DXGI_FORMAT_R8G8B8A8_UNORM(화면 버퍼 형식) 디스플레이 형식에 맞는 모드 수를 가져온다
+	// numModes가 들어가고, 마지막 매개변수(list 자리)가 NULL인 것에 집중
+	// DXGI : DirectX Graphics Infrastructure
+	// R8G8B8A8 : R 8bit, G 8bit, B 8bit, Alpha 8bit
+	// UNORM : unsigned normalized 0-255를 0.0-1.0 값으로 사용
+	result = adapterOutput->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ENUM_MODES_INTERLACED, &numModes, NULL);
+	if (FAILED(result))
+	{
+		return false;
+	}
+
+	// DXGI_FORMAT_R8G8B8A8_UNORM 버퍼를 지원하는 모니터의 모드들을 저장할 리스트 생성
+	// 모드 = 그래픽 카드가 모니터에 뿌릴 수 있는 스팩. 화면의 해상도, 주사율, 픽셀 형식 등등을 저장
+	displayModeList = new DXGI_MODE_DESC[numModes];
+	if (!displayModeList)
+	{
+		return false;
+	}
+
+	// 지정한 모니터의 모드를 채운다.
+	result = adapterOutput->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ENUM_MODES_INTERLACED, &numModes, displayModeList);
+	if (FAILED(result))
+	{
+		return false;
+	}
+	
+	// 모드 리스트를 순회
+	for (unsigned int i = 0; i < numModes; i++)
+	{
+		// 지정한 윈도우 창의 해상도와 맞는 모드를 찾는다.
+		// 하나의 모니터에는 하나의 모드만 있는 것이 아니라, 가능한 모든 모드가 있다.
+		// 예를 들어, 4K 모니터에는 QHD모드도 있고, FHD 해상도의 모드도 있다.
+		if (displayModeList[i].Width == (unsigned int)screenWidth)
+		{
+			if (displayModeList[i].Height == (unsigned int)screenHeight)
+			{
+				numerator = displayModeList[i].RefreshRate.Numerator;
+				denominator = displayModeList[i].RefreshRate.Denominator;
+			}
+		}
+	}
+
+	// 그래픽 카드 어댑터의 디스크립터를 가져온다.
+	// adapter는 IDXGIAdapter - 인터페이스라서, 어떤 그래픽 카드든 실행 할 수 있는 메서드를 제공
+	// adapter describe는 실제 그래픽 카드에 대한 정보(구조체)
+	result = adapter->GetDesc(&adapterDesc);
+	if (FAILED(result))
+	{
+		return false;
+	}
+
+	// 그래픽 카드 메모리 크기를 메가바이트 단위로 저장
+	mVideoCardMemory = (int)(adapterDesc.DedicatedVideoMemory / 1024 / 1024);
+
+	// 그래픽 카드 이름을 문자열로 저장
+	error = wcstombs_s(&stringLength, mVideoCardDescription, 128, adapterDesc.Description, 128);
+	if (error != 0)
+	{
+		return false;
+	}
+
+	delete[] displayModeList;
+	displayModeList = 0;
+
+	adapterOutput->Release();
+	adapterOutput = 0;
+
+	adapter->Release();
+	adapter = 0;
+
+	factory->Release();
+	factory = 0;
 }
