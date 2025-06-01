@@ -20,11 +20,13 @@
 #pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "user32.lib")
 
-IDXGISwapChain* swapchain;
-ID3D11Device* dev;
-ID3D11DeviceContext* devcon;
+IDXGISwapChain* swapchain; // 스왑 체인
+ID3D11Device* dev; // GPU 장치 - COM으로 연결
+ID3D11DeviceContext* devcon; // GPU와 렌더링 파이프 관리. 렌더링 방식 결정
+ID3D11RenderTargetView* backbuffer; // 백 버퍼에 렌더링할 이미지
 
 void InitD3D(HWND hWnd);
+void RenderFrame(void);
 void CleanD3D(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd,
@@ -72,6 +74,8 @@ int WINAPI WinMain(	HINSTANCE hInstance,
 						NULL );
 	::ShowWindow(hWnd, nCmdShow);
 
+	InitD3D(hWnd);
+	
 	MSG msg = { 0, };
 	// Windows 이벤트 및 메시지 처리
 	while (TRUE)
@@ -88,7 +92,7 @@ int WINAPI WinMain(	HINSTANCE hInstance,
 		else
 		{
 			// Game
-			InitD3D(hWnd);
+			RenderFrame();
 		}
 	}
 
@@ -152,19 +156,21 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 void InitD3D(HWND hWnd)
 {
+	// 스왑 체인 메타데이터
 	DXGI_SWAP_CHAIN_DESC scd;
 
 	::ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-	scd.BufferCount = 1;
-	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	scd.BufferCount = 1; // 백 버퍼 하나
+	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // 32비트 RGB
 	scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	scd.OutputWindow = hWnd;
-	scd.SampleDesc.Count = 4;
-	scd.Windowed = TRUE;
+	scd.SampleDesc.Count = 4; // 멀티 샘플 수
+	scd.Windowed = TRUE; // 창 모드 or 전체 화면 모드
 
-	::D3D11CreateDeviceAndSwapChain(NULL,
-		D3D_DRIVER_TYPE_HARDWARE,
+	// scd를 바탕으로 장치 컨텍스트와 스왑 체인 생성
+	::D3D11CreateDeviceAndSwapChain(NULL, // GPU 어뎁터를 찾는데 DXGI가 알아서 처리
+		D3D_DRIVER_TYPE_HARDWARE, // 드라이버 유형
 		NULL,
 		NULL,
 		NULL,
@@ -175,11 +181,43 @@ void InitD3D(HWND hWnd)
 		&dev,
 		NULL,
 		&devcon);
+
+	// 화면에 그릴 이미지는 2D이미지
+	ID3D11Texture2D* pBackBuffer;
+	// 스왑 체인에서 백 버퍼를 찾아 ID3D11Texture2D 객체를 생성
+	// 백 버퍼는 보통 0번쩨에 있음
+	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
+
+	// 렌더 타겟 객체를 생성
+	// 렌더 타겟은 백버퍼에 올리기 전 이미지를 생성하는 버퍼를 하나 할당하겠다는 의미
+	dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
+	pBackBuffer->Release();
+
+	// 렌더 타겟을 백 버퍼로 설정
+	devcon->OMSetRenderTargets(1, &backbuffer, NULL);
+
+	// 뷰포트 설정
+	D3D11_VIEWPORT viewport;
+	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+	viewport.TopLeftX = 0; // 좌측 상단 X값을 0
+	viewport.TopLeftY = 0; // 좌측 상단 Y값을 0
+	viewport.Width = 800; // 너비를 800
+	viewport.Height = 600; // 너비를 600
+	devcon->RSSetViewports(1, &viewport);
 }
 
+void RenderFrame(void)
+{
+	DirectX::XMFLOAT4 color(0.0f, 0.2f, 0.4f, 1.0f); // D3DXCOLOR는 이제 지원하지 않음
+	// 지정한 색상으로 채운다.
+	devcon->ClearRenderTargetView(backbuffer, &color.x);
+	// 백 버퍼와 프론트 버퍼 전환
+	swapchain->Present(0, 0);
+}
 void CleanD3D(void)
 {
 	swapchain->Release();
+	backbuffer->Release();
 	dev->Release();
 	devcon->Release();
 }
