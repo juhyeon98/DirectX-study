@@ -6,8 +6,26 @@
 * 4. 시스템의 서브 시스템에서 `/SUBSYSTEM:WINDOWS` 로 변경
 */
 
+#include <d3d11.h>
+#include <DirectXMath.h> // change d3dx11.h
+#include <WICTextureLoader.h> // change d3dx10.h
+
 #include <Windows.h>
+#include <windowsx.h>
+
 #include <iostream>
+
+#pragma comment (lib, "d3d11.lib")
+#pragma comment (lib, "dxgi.lib")
+#pragma comment (lib, "d3dcompiler.lib")
+#pragma comment (lib, "user32.lib")
+
+IDXGISwapChain* swapchain;
+ID3D11Device* dev;
+ID3D11DeviceContext* devcon;
+
+void InitD3D(HWND hWnd);
+void CleanD3D(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd,
 	UINT message,
@@ -70,6 +88,7 @@ int WINAPI WinMain(	HINSTANCE hInstance,
 		else
 		{
 			// Game
+			InitD3D(hWnd);
 		}
 	}
 
@@ -82,9 +101,85 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	{
 		case WM_DESTROY:
 		{
+			CleanD3D();
 			::PostQuitMessage(0); // WM_QUIT 전송
 			return 0;
 		}break;
 	}
 	::DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+// DXGI
+/*
+* DirectX Graphic Infrastructure
+* - DirectX의 일부가 아니라, DirectX와 하드웨어의 인터페이스 역할
+* - Application -> Direct3D 11 -> DXGI -> Hardware
+*/
+
+// Swap chain
+/*
+* - GPU는 메모리에 이미지 버퍼를 가지고 있음.
+* - 실제 화면에 렌더링 할 때에는 이미지 버퍼를 모니터로 전송
+* - 이미지 버퍼 채움 -> 모니터에 전송 -> 모니터 출력 -> 반복
+* - 하지만, 문제는 모니터 출력이 빠르지 않다는 것. 아무리 빨라도 60 ~ 100Hz
+* - 그래서 모니터 위쪽에는 이전 이미지가 나오고, 아래쪽은 새로운 이미지가 나오는 이상한 현상이 발생
+* 
+* - 이를 방지하기 위해 DXGI가 스와핑 기능을 구현
+* - 모니터에 직접 렌더링 하는 것이 아닌, 백 버퍼라는 보조 버퍼에 채우는 방식
+* - 프론트 버퍼는 현재 모니터에서 출력되는 버퍼
+* - DirectX가 백 버퍼에 이미지를 채우면, DXGI가 프론트 버퍼를 백 버퍼의 내용으로 채움
+* - 하지만 이렇게 해도 화면이 찢어질 수 있음
+* 
+* - 때문에 DXGI는 각 버퍼를 모두 포인터로 가지고 있고, 이 포인터 값만 변경해 티어링을 예방
+* - 모니터 주사율에 맞추어 포인터 값만 순식간에 바꾸어 티어링 현상을 예방하는 것
+*/
+
+// 렌더링 파이프라인
+/*
+* 1. Input assembler : 렌더링 하려는 3D 모델 정보를 GPU 메모리에 수집, 컴파일 후 렌더링 준비
+* 2. Rasterizer : 백 버퍼 이미지에 어떤 픽셀이 그려지고 색상이 무엇인지 결정
+* 3. Output merger : 개별 모델 이미지를 하나의 이미지로 결합하고 백 버퍼에 업로드
+*/
+
+// 그래픽 객체 구성 요소
+/*
+* 1. 점(point) 목록 : 꼭짓점의 목록, 각 꼭짓점의 위치 값을 가지고 있음.
+* 2. 선(line) 목록 : 정점 두개가 이루는 선분에 대한 목록. 3D 그리드, 웨이포인트 등에 유용
+* 3. 선(line) strips : 모든 정점이 선분으로 연결될 때, 각 정점들의 모음. 와이어 프레임 이미지, 디버깅에 유용
+* 4. 삼각형 목록 : 세 개의 꼭짓점 그룹을 이용해 하나의 삼각형을 만듬. 이 삼각형들의 목록.
+* 5. 삼각형 strips : 서로 연결된 일련의 삼각형을 생성하는 꼭짓점들의 모음. 3D 그래픽스에 자주 사용
+*/
+
+void InitD3D(HWND hWnd)
+{
+	DXGI_SWAP_CHAIN_DESC scd;
+
+	::ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
+
+	scd.BufferCount = 1;
+	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	scd.OutputWindow = hWnd;
+	scd.SampleDesc.Count = 4;
+	scd.Windowed = TRUE;
+
+	::D3D11CreateDeviceAndSwapChain(NULL,
+		D3D_DRIVER_TYPE_HARDWARE,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		D3D11_SDK_VERSION,
+		&scd,
+		&swapchain,
+		&dev,
+		NULL,
+		&devcon);
+}
+
+void CleanD3D(void)
+{
+	swapchain->Release();
+	dev->Release();
+	devcon->Release();
 }
