@@ -15,6 +15,9 @@
 
 #include <iostream>
 
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
+
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "dxgi.lib")
 #pragma comment (lib, "d3dcompiler.lib")
@@ -50,11 +53,11 @@ int WINAPI WinMain(	HINSTANCE hInstance,
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = hInstance;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+	//wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
 	wc.lpszClassName = TEXT("WindowClass1");
 
 
-	RECT wr = { 0,0,500,400 };
+	RECT wr = { 0,0,SCREEN_WIDTH,SCREEN_HEIGHT };
 	// 클라이언트 영역을 기준으로 전체 윈도우 크기로 변환
 	AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
 
@@ -63,7 +66,8 @@ int WINAPI WinMain(	HINSTANCE hInstance,
 	hWnd = CreateWindowEx(NULL,
 						TEXT("WindowClass1"),
 						TEXT("TEST"),
-						WS_OVERLAPPEDWINDOW,
+						//WS_OVERLAPPEDWINDOW,
+						WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
 						300,
 						300,
 						wr.right - wr.left,
@@ -138,13 +142,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 * - 모니터 주사율에 맞추어 포인터 값만 순식간에 바꾸어 티어링 현상을 예방하는 것
 */
 
-// 렌더링 파이프라인
-/*
-* 1. Input assembler : 렌더링 하려는 3D 모델 정보를 GPU 메모리에 수집, 컴파일 후 렌더링 준비
-* 2. Rasterizer : 백 버퍼 이미지에 어떤 픽셀이 그려지고 색상이 무엇인지 결정
-* 3. Output merger : 개별 모델 이미지를 하나의 이미지로 결합하고 백 버퍼에 업로드
-*/
-
 // 그래픽 객체 구성 요소
 /*
 * 1. 점(point) 목록 : 꼭짓점의 목록, 각 꼭짓점의 위치 값을 가지고 있음.
@@ -163,10 +160,13 @@ void InitD3D(HWND hWnd)
 
 	scd.BufferCount = 1; // 백 버퍼 하나
 	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // 32비트 RGB
+	scd.BufferDesc.Width = SCREEN_WIDTH;
+	scd.BufferDesc.Height = SCREEN_HEIGHT;
 	scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	scd.OutputWindow = hWnd;
 	scd.SampleDesc.Count = 4; // 멀티 샘플 수
 	scd.Windowed = TRUE; // 창 모드 or 전체 화면 모드
+	scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 	// scd를 바탕으로 장치 컨텍스트와 스왑 체인 생성
 	::D3D11CreateDeviceAndSwapChain(NULL, // GPU 어뎁터를 찾는데 DXGI가 알아서 처리
@@ -201,8 +201,8 @@ void InitD3D(HWND hWnd)
 	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
 	viewport.TopLeftX = 0; // 좌측 상단 X값을 0
 	viewport.TopLeftY = 0; // 좌측 상단 Y값을 0
-	viewport.Width = 800; // 너비를 800
-	viewport.Height = 600; // 너비를 600
+	viewport.Width = SCREEN_WIDTH; // 너비를 800
+	viewport.Height = SCREEN_HEIGHT; // 너비를 600
 	devcon->RSSetViewports(1, &viewport);
 }
 
@@ -216,6 +216,7 @@ void RenderFrame(void)
 }
 void CleanD3D(void)
 {
+	swapchain->SetFullscreenState(FALSE, NULL);
 	swapchain->Release();
 	backbuffer->Release();
 	dev->Release();
