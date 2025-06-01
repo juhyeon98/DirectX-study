@@ -7,6 +7,7 @@
 */
 
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <DirectXMath.h> // change d3dx11.h
 #include <WICTextureLoader.h> // change d3dx10.h
 
@@ -28,9 +29,14 @@ ID3D11Device* dev; // GPU 장치 - COM으로 연결
 ID3D11DeviceContext* devcon; // GPU와 렌더링 파이프 관리. 렌더링 방식 결정
 ID3D11RenderTargetView* backbuffer; // 백 버퍼에 렌더링할 이미지
 
+ID3D11VertexShader* pVs;
+ID3D11PixelShader* pPs;
+
 void InitD3D(HWND hWnd);
 void RenderFrame(void);
 void CleanD3D(void);
+
+void InitPipeLine(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd,
 	UINT message,
@@ -217,8 +223,31 @@ void RenderFrame(void)
 void CleanD3D(void)
 {
 	swapchain->SetFullscreenState(FALSE, NULL);
+
+	pVs->Release();
+	pPs->Release();
+
 	swapchain->Release();
 	backbuffer->Release();
 	dev->Release();
 	devcon->Release();
+}
+
+void InitPipeLine(void)
+{
+	// 셰이더 두개를 가져와 컴파일
+	ID3D10Blob* vs, * ps;
+	ID3DBlob* errorBlob;
+
+	// D3DX11CompileFromFile -> D3DCompileFromFile
+	D3DCompileFromFile(L"shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, &vs, &errorBlob);
+	D3DCompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, &ps, &errorBlob);
+
+	// 컴파일된 셰이더는 COM 객체에 저장
+	// COM 객체를 이용해 셰이더 객채 생성
+	dev->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), NULL, &pVs);
+	dev->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), NULL, &pPs);
+
+	devcon->VSSetShader(pVs, 0, 0);
+	devcon->PSSetShader(pPs, 0, 0);
 }
