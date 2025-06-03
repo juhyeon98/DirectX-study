@@ -32,11 +32,23 @@ ID3D11RenderTargetView* backbuffer; // 백 버퍼에 렌더링할 이미지
 ID3D11VertexShader* pVs;
 ID3D11PixelShader* pPs;
 
+ID3D11Buffer* pVBuffer; // vertex buffer
+ID3D11InputLayout* pLayout; // input layout
+ID3D11VertexShader; // vertex shader
+ID3D11PixelShader* pPS; // pixel shader
+
+struct VERTEX
+{
+	FLOAT X, Y, Z;
+	DirectX::XMFLOAT4 color;
+};
+
 void InitD3D(HWND hWnd);
 void RenderFrame(void);
 void CleanD3D(void);
 
 void InitPipeLine(void);
+void InitGraphics(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd,
 	UINT message,
@@ -210,13 +222,25 @@ void InitD3D(HWND hWnd)
 	viewport.Width = SCREEN_WIDTH; // 너비를 800
 	viewport.Height = SCREEN_HEIGHT; // 너비를 600
 	devcon->RSSetViewports(1, &viewport);
+
+	InitPipeLine();
+	InitGraphics();
 }
 
 void RenderFrame(void)
 {
 	DirectX::XMFLOAT4 color(0.0f, 0.2f, 0.4f, 1.0f); // D3DXCOLOR는 이제 지원하지 않음
+
+	// vertex buffer 지정
+	UINT stride = sizeof(VERTEX);
+	UINT offset = 0;
+	devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
+	devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	devcon->Draw(3, 0);
+
 	// 지정한 색상으로 채운다.
-	devcon->ClearRenderTargetView(backbuffer, &color.x);
+	//devcon->ClearRenderTargetView(backbuffer, &color.x);
+
 	// 백 버퍼와 프론트 버퍼 전환
 	swapchain->Present(0, 0);
 }
@@ -224,13 +248,25 @@ void CleanD3D(void)
 {
 	swapchain->SetFullscreenState(FALSE, NULL);
 
+	pLayout->Release();
 	pVs->Release();
 	pPs->Release();
+	pVBuffer->Release();
 
 	swapchain->Release();
 	backbuffer->Release();
 	dev->Release();
 	devcon->Release();
+}
+
+void InitGraphics(void)
+{
+	VERTEX input[] =
+	{
+		{0.0f, 0.5f, 0.0f, DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f)},
+		{0.45f, -0.5, 0.0f, DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f)},
+		{-0.45f, -0.5f, 0.0f, DirectX::XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f)}
+	};
 }
 
 void InitPipeLine(void)
@@ -250,4 +286,17 @@ void InitPipeLine(void)
 
 	devcon->VSSetShader(pVs, 0, 0);
 	devcon->PSSetShader(pPs, 0, 0);
+
+	// vertex buffer 형성
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory(&bd, sizeof(D3D11_BUFFER_DESC));
+	bd.Usage = D3D11_USAGE_DYNAMIC; // CPU는 쓰기, GPU는 읽기
+	bd.ByteWidth = sizeof(VERTEX) * 3;// 크기는 정점 3개
+	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER; // 정점 버퍼로 사용
+	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // CPU가 write 할 수 있음
+
+	D3D11_MAPPED_SUBRESOURCE ms;
+	devcon->Map(pVBuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms);
+	memcpy(ms.pData, , sizeof());
+	devcon->Unmap()
 }
