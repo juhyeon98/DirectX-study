@@ -24,6 +24,12 @@
 #pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "user32.lib")
 
+struct VERTEX
+{
+	FLOAT X, Y, Z;
+	DirectX::XMFLOAT4 color;
+};
+
 IDXGISwapChain* swapchain; // 스왑 체인
 ID3D11Device* dev; // GPU 장치 - COM으로 연결
 ID3D11DeviceContext* devcon; // GPU와 렌더링 파이프 관리. 렌더링 방식 결정
