@@ -24,12 +24,6 @@
 #pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "user32.lib")
 
-struct VERTEX
-{
-	FLOAT X, Y, Z;
-	DirectX::XMFLOAT4 color;
-};
-
 IDXGISwapChain* swapchain; // 스왑 체인
 ID3D11Device* dev; // GPU 장치 - COM으로 연결
 ID3D11DeviceContext* devcon; // GPU와 렌더링 파이프 관리. 렌더링 방식 결정
@@ -53,7 +47,7 @@ void InitD3D(HWND hWnd);
 void RenderFrame(void);
 void CleanD3D(void);
 
-void InitPipeLine(void);
+void InitPipeline(void);
 void InitGraphics(void);
 
 LRESULT CALLBACK WindowProc(HWND hWnd,
@@ -179,7 +173,6 @@ void InitD3D(HWND hWnd)
 {
 	// 스왑 체인 메타데이터
 	DXGI_SWAP_CHAIN_DESC scd;
-
 	::ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
 	scd.BufferCount = 1; // 백 버퍼 하나
@@ -229,7 +222,7 @@ void InitD3D(HWND hWnd)
 	viewport.Height = SCREEN_HEIGHT; // 너비를 600
 	devcon->RSSetViewports(1, &viewport);
 
-	InitPipeLine();
+	InitPipeline();
 	InitGraphics();
 }
 
@@ -237,15 +230,15 @@ void RenderFrame(void)
 {
 	DirectX::XMFLOAT4 color(0.0f, 0.2f, 0.4f, 1.0f); // D3DXCOLOR는 이제 지원하지 않음
 
+	// 지정한 색상으로 채운다.
+	devcon->ClearRenderTargetView(backbuffer, &color.x);
+
 	// vertex buffer 지정
 	UINT stride = sizeof(VERTEX);
 	UINT offset = 0;
 	devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
 	devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	devcon->Draw(3, 0);
-
-	// 지정한 색상으로 채운다.
-	//devcon->ClearRenderTargetView(backbuffer, &color.x);
 
 	// 백 버퍼와 프론트 버퍼 전환
 	swapchain->Present(0, 0);
@@ -273,36 +266,44 @@ void InitGraphics(void)
 		{0.45f, -0.5, 0.0f, DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f)},
 		{-0.45f, -0.5f, 0.0f, DirectX::XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f)}
 	};
-}
 
-void InitPipeLine(void)
-{
-	// 셰이더 두개를 가져와 컴파일
-	ID3D10Blob* vs, * ps;
-	ID3DBlob* errorBlob;
-
-	// D3DX11CompileFromFile -> D3DCompileFromFile
-	D3DCompileFromFile(L"shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, &vs, &errorBlob);
-	D3DCompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, &ps, &errorBlob);
-
-	// 컴파일된 셰이더는 COM 객체에 저장
-	// COM 객체를 이용해 셰이더 객채 생성
-	dev->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), NULL, &pVs);
-	dev->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), NULL, &pPs);
-
-	devcon->VSSetShader(pVs, 0, 0);
-	devcon->PSSetShader(pPs, 0, 0);
-
-	// vertex buffer 형성
 	D3D11_BUFFER_DESC bd;
-	ZeroMemory(&bd, sizeof(D3D11_BUFFER_DESC));
-	bd.Usage = D3D11_USAGE_DYNAMIC; // CPU는 쓰기, GPU는 읽기
-	bd.ByteWidth = sizeof(VERTEX) * 3;// 크기는 정점 3개
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER; // 정점 버퍼로 사용
-	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // CPU가 write 할 수 있음
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DYNAMIC;
+	bd.ByteWidth = sizeof(VERTEX) * 3;
+	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	dev->CreateBuffer(&bd, NULL, &pVBuffer);
 
 	D3D11_MAPPED_SUBRESOURCE ms;
 	devcon->Map(pVBuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms);
-	memcpy(ms.pData, , sizeof());
-	devcon->Unmap()
+	memcpy(ms.pData, input, sizeof(input));
+	devcon->Unmap(pVBuffer, NULL);
+}
+
+void InitPipeline(void)
+{
+	// load and compile the two shaders
+	ID3D10Blob* VS, * PS;
+	ID3DBlob* errorBlob;
+	D3DCompileFromFile(L"shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, &VS, &errorBlob);
+	D3DCompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, &PS, &errorBlob);
+
+	// encapsulate both shaders into shader objects
+	dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL, &pVs);
+	dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL, &pPs);
+
+	// set the shader objects
+	devcon->VSSetShader(pVs, 0, 0);
+	devcon->PSSetShader(pPs, 0, 0);
+
+	// create the input layout object
+	D3D11_INPUT_ELEMENT_DESC ied[] =
+	{
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+	};
+
+	dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
+	devcon->IASetInputLayout(pLayout);
 }
